@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/src/widgets/container.dart';
 import 'package:flutter/src/widgets/framework.dart';
 import 'package:mynotes/services/auth/auth_service.dart';
+import 'package:mynotes/services/cloud/firbase_cloud_storage.dart';
 import 'package:mynotes/services/crud/notes_service.dart';
 import 'package:mynotes/utilities/dialogs/generics/get_arguments.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../../services/cloud/cloud_note.dart';
+import '../../utilities/dialogs/cannot_share_empty_note_dialog.dart';
+
 
 class CreateUpdateNoteView extends StatefulWidget {
   const CreateUpdateNoteView({super.key});
@@ -13,12 +19,12 @@ class CreateUpdateNoteView extends StatefulWidget {
 }
 
 class _CreateUpdateNoteViewState extends State<CreateUpdateNoteView> {
-  DatabaseNote? _note;
-  late final NoteService _notesService;
+  CloudNote? _note;
+  late final FirebaseCloudStorage _notesService;
   late final TextEditingController _textController;
 
 @override void initState(){
-  _notesService=NoteService();
+  _notesService=FirebaseCloudStorage();
   _textController=TextEditingController();
   super.initState();
 }
@@ -28,7 +34,7 @@ void _textControllerListener() async {
     return;
   }
  final text =_textController.text;
- await _notesService.updateNote(note: note, text: text);
+ await _notesService.updateNote(documentId: note.documentId, text: text,);
 }
 void _setupTextControllerListener()  {
       _textController.removeListener(_textControllerListener);
@@ -36,8 +42,8 @@ void _setupTextControllerListener()  {
     }
 
 
-Future<DatabaseNote> createOrGetExistingNote(BuildContext context) async{
-    final widgetNote = context.getArugment<DatabaseNote>();
+Future<CloudNote> createOrGetExistingNote(BuildContext context) async{
+    final widgetNote = context.getArugment<CloudNote>();
     if(widgetNote != null){
       _note = widgetNote;
       _textController.text = widgetNote.text;
@@ -50,9 +56,8 @@ Future<DatabaseNote> createOrGetExistingNote(BuildContext context) async{
   
 
   final currentUser = AuthService.firebase().currentUser!;
-  final email =currentUser.email!;
-  final owner = await _notesService.getUser(email: email);
-final newNote =  await _notesService.createNote(owner: owner);
+  final userId =currentUser.id;
+final newNote =  await _notesService.createNewNote(ownerUserId: userId);
  _note =newNote;
  return newNote;
   }
@@ -60,7 +65,7 @@ final newNote =  await _notesService.createNote(owner: owner);
   void _deleteNoteIfTextIsEmpty() {
     final note =_note;
     if(_textController.text.isEmpty && note != null){
-      _notesService.deleteNote(id: note.id);
+      _notesService.deleteNote(documentId: note.documentId);
     }
   }
   
@@ -68,7 +73,7 @@ final newNote =  await _notesService.createNote(owner: owner);
     final note=_note;
   final text =_textController.text;
   if(note != null && text.isNotEmpty){
-    await _notesService.updateNote(note: note, text: text,);
+    await _notesService.updateNote(documentId: note.documentId, text: text);
   }
   }
 
@@ -85,6 +90,16 @@ final newNote =  await _notesService.createNote(owner: owner);
     return Scaffold(
       appBar: AppBar(
         title:  const Text('New Note'),
+        actions: [IconButton(onPressed: () async {
+          final text =_textController.text;
+          if(_note == null || text.isEmpty){
+            await  showCannotShareEmptyNoteDialog(context);
+          } else {
+            Share.share(text);
+            
+          }
+          
+        }, icon: const Icon(Icons.share))],
       ),
       body: FutureBuilder(
         future: createOrGetExistingNote(context),
